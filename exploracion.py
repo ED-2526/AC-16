@@ -31,7 +31,7 @@ def clean_date(txt):
         return int(n1 + n2)/2
     return np.nan
 
-def dentro(anno, timeline):
+def calc_dentro(anno, timeline):
     res = re.search(r"(\d+)-(\d+)", timeline)
     if res:
         n1 = int(res.group(1))
@@ -47,9 +47,10 @@ df = pd.read_csv("labels.csv", sep="\t", usecols=columnas)
 df = df.loc[df["FORM"] == "painting"].copy()
 df["CLEAN_DATE"] = df["DATE"].apply(clean_date)
 #print(df.loc[((df["CLEAN_DATE"].isna()) & (df["DATE"] != "-"))])
-#print(df["CLEAN_DATE"].sort_values().head(20))
-#print(df.isna().sum())
-df["DENTRO"] = df.apply(lambda x: dentro(x["CLEAN_DATE"], x["TIMELINE"]), axis=1)
-#print(df["BORN-DIED"].apply(get_fechas_autor).isna().sum())
-print(df[["BORN-DIED", "DATE", "CLEAN_DATE","TIMELINE", "DENTRO"]].sort_values(by="DENTRO", ascending=False).head(50))
+df["DENTRO"] = df.apply(lambda x: calc_dentro(x["CLEAN_DATE"], x["TIMELINE"]), axis=1)
+print(df.shape)
+df = df.loc[df["DENTRO"] < 50].copy()
+print(df.shape)
+print(df[["BORN-DIED", "DATE", "CLEAN_DATE","TIMELINE", "DENTRO"]].sort_values(by="DENTRO", ascending=False))
+print(df["DENTRO"].mean())
 
