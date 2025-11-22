@@ -27,7 +27,6 @@ def clean_date(txt):
         l2 = l - 4
         n1 = int(res.group()[:4])
         n2 = int(res.group()[:-l2*2] + res.group()[-l2:])
-        print(res.group(), n1, n2)
         return int(n1 + n2)/2
     return np.nan
 
@@ -42,15 +41,16 @@ def calc_dentro(anno, timeline):
             else:
                 return min(abs(anno - n1), abs(anno - n2))
     return np.nan
-columnas = ["ID", "FILE", "AUTHOR", "BORN-DIED", "DATE","FORM", "TIMELINE"]
-df = pd.read_csv("labels.csv", sep="\t", usecols=columnas)
-df = df.loc[df["FORM"] == "painting"].copy()
-df["CLEAN_DATE"] = df["DATE"].apply(clean_date)
-#print(df.loc[((df["CLEAN_DATE"].isna()) & (df["DATE"] != "-"))])
-df["DENTRO"] = df.apply(lambda x: calc_dentro(x["CLEAN_DATE"], x["TIMELINE"]), axis=1)
-print(df.shape)
-df = df.loc[df["DENTRO"] < 50].copy()
-print(df.shape)
-print(df[["BORN-DIED", "DATE", "CLEAN_DATE","TIMELINE", "DENTRO"]].sort_values(by="DENTRO", ascending=False))
-print(df["DENTRO"].mean())
 
+def cargar_labels(path= "labels.csv"):
+    columnas = ["ID", "FILE", "DATE","FORM", "TIMELINE"]
+    df = pd.read_csv(path, sep="\t", usecols=columnas)
+    df = df.loc[df["FORM"] == "painting"].copy()
+    df["CLEAN_DATE"] = df["DATE"].apply(clean_date)
+    df["DENTRO"] = df.apply(lambda x: calc_dentro(x["CLEAN_DATE"], x["TIMELINE"]), axis=1)
+    df = df.loc[df["DENTRO"] < 50].copy()
+    return df
+
+if __name__ == "__main__":
+    df = cargar_labels()
+    print(df)
