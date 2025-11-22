@@ -25,13 +25,14 @@ def leer_metadatos(root, df, file_col="FILE"):
         path = os.path.join(root, arx)
 
         if not os.path.exists(path):
-            results.append((arx, None, None, None, None))
+            results.append((arx, None, None, None, None, None))
             continue
 
         w, h, mode, fmt = get_metadata(path)
-        results.append((arx, w, h, mode, fmt))
+        size = w * h
+        results.append((arx, w, h, size, mode, fmt))
 
-    return pd.DataFrame(results, columns=["file", "width", "height", "mode", "format"])
+    return pd.DataFrame(results, columns=["file", "width", "height", "size", "mode", "format"])
 
 def image_generator(root, df, file_col="FILE"):
     for arx in df[file_col]:
@@ -65,3 +66,10 @@ plt.xlabel("ratio (w/h)")
 plt.ylabel("area")
 plt.title("Aspect ratio vs tamaño")
 plt.show()
+
+plt.hist(df_meta["width"] * df_meta["height"])
+plt.xlabel('Tamaño en millones de pixeles')
+plt.title('Histograma tamaños')
+plt.show()
+print(df.describe())
+print(df_meta.describe())
