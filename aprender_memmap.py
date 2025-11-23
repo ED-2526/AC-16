@@ -4,6 +4,8 @@ import cv2
 import os
 from tqdm import tqdm
 from time import time
+from sklearn.cluster import MiniBatchKMeans
+import matplotlib.pyplot as plt
 
 def image_generator(root, df, file_col="FILE"):
     for arx in df[file_col]:
@@ -55,36 +57,33 @@ def dense_sift(image, step=8, patch_size=16):
 root = "../../toy_dataset"
 df = cargar_labels()
 features = []
-a = time()
-i = 0
-import time
-from tqdm import tqdm
-import numpy as np
-import matplotlib.pyplot as plt
 
-times_list = []
-features = []   # versión original
-i = 0
-N = len(df) * 4000
-D = 128
-k = 0
-mm = np.memmap("dense_sift_desc.dat", dtype=np.float32, mode="w+", shape=(N, D))
-for img in tqdm(image_generator(root, df), desc="Dense SIFT (lista)"):
-    t0 = time.time()
+subset_size = 100
+subset_df = df.sample(n=subset_size, random_state=42)
+
+sample_desc = []
+
+for img in tqdm(image_generator(root, subset_df)):
     kp, desc = dense_sift(img)
-    for p in desc:
-        if p is not None:
-            mm[k,:] = p
-            k += 1
-    times_list.append(time.time() - t0)
-    if i >= 10000:
-        break
-    i += 1
-def smooth_mean(values, block=20):
-    values = np.array(values)
-    n = len(values) // block
-    return values[:n*block].reshape(n, block).mean(axis=1)
+    if desc is not None:
+        sample_desc.append(desc)
 
-plt.plot(smooth_mean(times_list), label="Lista (RAM)", alpha=0.8)
+sample_desc = np.vstack(sample_desc)
+print(sample_desc.shape)
+
+Ks = [64,128,256,512,1024,2048]
+inertias = []
+
+for K in Ks:
+    kmeans = MiniBatchKMeans(n_clusters=K, batch_size=20000)
+    kmeans.fit(sample_desc)
+    inertias.append(kmeans.inertia_)
+
+
+plt.figure(figsize=(10,5))
+plt.plot(Ks, inertias, marker="o")
+plt.title("Elbow para elegir K (BoW)")
+plt.xlabel("Número de clusters (K)")
+plt.ylabel("Inercia")
+plt.grid(True)
 plt.show()
-print(np.array(features).shape)
