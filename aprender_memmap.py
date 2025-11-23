@@ -58,26 +58,34 @@ root = "../../toy_dataset"
 df = cargar_labels()
 features = []
 
-subset_size = 100
+subset_size = 2000
+prop_test = 0.2
 subset_df = df.sample(n=subset_size, random_state=42)
-
+test_df = subset_df[int(subset_size*(1-prop_test)):]
+subset_df = subset_df[:int(subset_size*(1-prop_test))]
 sample_desc = []
+test_desc = []
 
 for img in tqdm(image_generator(root, subset_df)):
     kp, desc = dense_sift(img)
     if desc is not None:
         sample_desc.append(desc)
-
+for img in tqdm(image_generator(root, test_df)):
+    kp, desc = dense_sift(img)
+    if desc is not None:
+        test_desc.append(desc)
 sample_desc = np.vstack(sample_desc)
+test_desc = np.vstack(test_desc)
 print(sample_desc.shape)
+print(test_desc.shape)
 
 Ks = [64,128,256,512,1024,2048]
 inertias = []
 
-for K in Ks:
+for K in tqdm(Ks, desc= "Probando K"):
     kmeans = MiniBatchKMeans(n_clusters=K, batch_size=20000)
     kmeans.fit(sample_desc)
-    inertias.append(kmeans.inertia_)
+    inertias.append(kmeans.score(test_desc))
 
 
 plt.figure(figsize=(10,5))
