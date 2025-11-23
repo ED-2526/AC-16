@@ -1,7 +1,7 @@
 import pandas as pd
 import re
 import numpy as np
-   
+import matplotlib.pyplot as plt
 
 def clean_date(txt):
     res= re.search(r"(\d\d|\d)th",txt)
@@ -54,3 +54,7 @@ def cargar_labels(path= "labels.csv"):
 if __name__ == "__main__":
     df = cargar_labels()
     print(df)
+    plt.hist(df["CLEAN_DATE"], bins= 500, density=True)
+    plt.xlabel('Año')
+    plt.title('Histograma años')
+    plt.show()

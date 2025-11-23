@@ -19,4 +19,9 @@ def image_generator(root, df, file_col="FILE"):
             img = cv2.imread(path)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             yield img
-
+root = "../../toy_dataset"
+df = cargar_labels()
+X_arx = df[["FILE"]]
+y = df[["CLEAN_DATE"]]
+X_arx_train, y_train, X_arx_test, y_test = train_test_split(X_arx, y, test_size= 0.3, random_state=42)
+print(X_arx_train.shape, y_train.shape)
