@@ -7,6 +7,8 @@ from tqdm import tqdm
 from time import time
 from sklearn.cluster import MiniBatchKMeans
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import normalize
+from sklearn.decomposition import PCA
 
 def image_generator(root, df, file_col="FILE"):
     for arx in df[file_col]:
@@ -71,22 +73,35 @@ for img in tqdm(image_generator(root, subset_df)):
     kp, desc = dense_sift(img)
     if desc is not None:
         sample_desc.append(desc)
+"""
+"""
 for img in tqdm(image_generator(root, test_df)):
     kp, desc = dense_sift(img)
     if desc is not None:
         test_desc.append(desc)
-sample_desc = np.vstack(sample_desc)
-test_desc = np.vstack(test_desc)
-print(sample_desc.shape)
-print(test_desc.shape)
 """
-"""Ks = [64,128,256,512,1024,2048]
+"""
+sample_desc = np.vstack(sample_desc)
+sample_desc = normalize(sample_desc, norm="l2")
+#test_desc = np.vstack(test_desc)
+#test_desc = normalize(test_desc, norm="l2")
+pca = PCA(n_components=32, whiten=True)
+sample_desc = pca.fit_transform(sample_desc)
+joblib.dump(pca, "pca_sift_32.pkl")
+#test_desc = pca.transform(test_desc)
+print(sample_desc.shape)
+#print(test_desc.shape)
+"""
+"""
+Ks = [64,128,256,512,1024,2048]
 inertias = []
 
 for K in tqdm(Ks, desc= "Probando K"):
     kmeans = MiniBatchKMeans(n_clusters=K, batch_size=20000)
     kmeans.fit(sample_desc)
     inertias.append(kmeans.score(test_desc))
+    joblib.dump(kmeans, f"kmeans_bow_{K}.pkl")
+
 
 
 plt.figure(figsize=(10,5))
@@ -96,51 +111,76 @@ plt.xlabel("Número de clusters (K)")
 plt.ylabel("Inercia")
 plt.grid(True)
 plt.show()
+
 """
 """
 K = 512
 kmeans = MiniBatchKMeans(n_clusters=K, batch_size=20000)
 kmeans.fit(sample_desc)
-joblib.dump(kmeans, "kmeans_bow.pkl")
 print("✔ KMeans entrenado y guardado como 'kmeans_bow.pkl'")
+"""
 import os
 import cv2
 import numpy as np
 """
-kmeans = joblib.load("kmeans_bow.pkl")
-print("✔ KMeans cargado desde 'kmeans_bow.pkl'")
+"""
+kmeans = joblib.load("kmeans_bow_512.pkl")
+print("✔ KMeans cargado desde 'kmeans_bow_512.pkl'")
 def save_representative_patches(
-    images, keypoints_img, descriptors_img, kmeans,
+    images, keypoints_img, descriptors_img,
+    pca, kmeans,
     out_dir="patches", patch_size=32, n_samples=20
 ):
 
     os.makedirs(out_dir, exist_ok=True)
-    K = kmeans.n_clusters
+
+    # Centros del clustering (ya en espacio PCA-whitened)
     centers = kmeans.cluster_centers_
+    K = centers.shape[0]
 
     # Contador global de archivos por cluster
     cluster_counters = {c: 0 for c in range(K)}
 
-    for img_idx, (image, keypoints, descriptors) in enumerate(
-        tqdm(zip(images, keypoints_img, descriptors_img), total=len(images), desc="Guardando representacion")
+    for img_idx, (image, keypoints, descriptors_raw) in enumerate(
+        tqdm(zip(images, keypoints_img, descriptors_img),
+             total=len(images), desc="Guardando representacion")
     ):
-        if descriptors is None or len(descriptors) == 0:
+
+        # Si no hay descriptores, saltamos
+        if descriptors_raw is None or len(descriptors_raw) == 0:
             continue
 
-        # Predicción de clusters
-        labels = kmeans.predict(descriptors)
+        # ---------------------------------------
+        # 1) NORMALIZAR descriptores (L2) — Obligatorio
+        # ---------------------------------------
+        descriptors_norm = normalize(descriptors_raw, norm="l2")
 
-        # Calcular distancia al centroide de su cluster
-        distances = np.linalg.norm(descriptors - centers[labels], axis=1)
+        # ---------------------------------------
+        # 2) PCA + WHITENING — Obligatorio
+        # ---------------------------------------
+        descriptors_pca = pca.transform(descriptors_norm)
 
-        # Tomar los n_samples más representativos de esta imagen
+        # ---------------------------------------
+        # 3) Clustering usando descriptores PCA
+        # ---------------------------------------
+        labels = kmeans.predict(descriptors_pca)
+
+        # ---------------------------------------
+        # 4) Distancias al centroide en espacio PCA-whitened
+        # ---------------------------------------
+        distances = np.linalg.norm(descriptors_pca - centers[labels], axis=1)
+
+        # ---------------------------------------
+        # 5) Seleccionar top-n patches más representativos
+        # ---------------------------------------
         top_idx = np.argsort(distances)[:n_samples]
 
-        for rank, i in enumerate(top_idx):
-            kp = keypoints[i]
-            cluster = labels[i]
+        for idx in top_idx:
+            kp = keypoints[idx]
+            cluster = labels[idx]
 
             x, y = int(kp.pt[0]), int(kp.pt[1])
+
             patch = image[
                 max(0, y - patch_size): y + patch_size,
                 max(0, x - patch_size): x + patch_size
@@ -149,20 +189,25 @@ def save_representative_patches(
             cluster_dir = os.path.join(out_dir, f"cluster_{cluster}")
             os.makedirs(cluster_dir, exist_ok=True)
 
-            fname = os.path.join(cluster_dir, f"img{img_idx}_patch{cluster_counters[cluster]}.png")
+            fname = os.path.join(
+                cluster_dir,
+                f"img{img_idx}_patch{cluster_counters[cluster]}.png"
+            )
             cv2.imwrite(fname, cv2.cvtColor(patch, cv2.COLOR_RGB2BGR))
+
             cluster_counters[cluster] += 1
 
-    print("✔ Todos los patches representativos guardados (top por imagen).")
+    print("✔ Patches representativos guardados con PCA + Whitening + Normalization.")
 # -------------------------------
 # EJEMPLO DE USO
 # -------------------------------
 
 # Tomar una imagen de tu test_df
+
 images = []
 kps = []
 descs = []
-for img in tqdm(image_generator(root, test_df), desc="Dense SIFT para guardar patches"):
+for img in tqdm(image_generator(root, subset_df), desc="Dense SIFT para guardar patches"):
     kp, desc = dense_sift(img)
     images.append(img)
     kps.append(kp)
@@ -171,8 +216,10 @@ save_representative_patches(
     images=images,
     keypoints_img=kps,
     descriptors_img=descs,
+    pca=joblib.load("pca_sift_32.pkl"),
     kmeans=kmeans,      # tu MiniBatchKMeans ya entrenado
-    out_dir="patches",
+    out_dir="../../patches_norm_512_gigante",
     patch_size=16,
-    n_samples=1       # puedes poner 10, 20, 50…
+    n_samples=3      # puedes poner 10, 20, 50…
 )
+
