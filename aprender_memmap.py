@@ -20,8 +20,6 @@ def image_generator(root, df, file_col="FILE"):
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             yield img
 
-import cv2
-
 def reescalar(image, max_size=512):
     h, w = image.shape[:2]
     if h > w:
@@ -125,7 +123,7 @@ import numpy as np
 """
 """
 kmeans = joblib.load("kmeans_bow_512.pkl")
-print("✔ KMeans cargado desde 'kmeans_bow_512.pkl'")
+print("✔ KMeans cargado desde kmeans_bow_512.pkl")
 def save_representative_patches(
     images, keypoints_img, descriptors_img,
     pca, kmeans,
