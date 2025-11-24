@@ -1,85 +1,101 @@
 import os
 import cv2
 import numpy as np
+from entrenar_kmeans import *
 
 def save_representative_patches(
-    image, keypoints, descriptors, kmeans,
+    images, keypoints_img, descriptors_img,
+    pca, kmeans,
     out_dir="patches", patch_size=32, n_samples=20
 ):
-    """
-    Guarda los patches representativos por cluster.
-    
-    image: imagen original
-    keypoints: lista de cv2.KeyPoint
-    descriptors: matriz Nx128
-    kmeans: modelo MiniBatchKMeans ya entrenado
-    out_dir: carpeta base para guardar resultados
-    patch_size: tamaño del patch alrededor del keypoint
-    n_samples: número de patches representativos por cluster
-    """
 
-    # Crear carpetas
     os.makedirs(out_dir, exist_ok=True)
-    K = kmeans.n_clusters
+
+    # Centros del clustering (ya en espacio PCA-whitened)
     centers = kmeans.cluster_centers_
+    K = centers.shape[0]
 
-    # Predecir cluster para cada descriptor
-    labels = kmeans.predict(descriptors)
+    # Contador global de archivos por cluster
+    cluster_counters = {c: 0 for c in range(K)}
 
-    # Agrupar (kp, desc) por cluster
-    cluster_groups = {c: [] for c in range(K)}
-    for kp, desc, lab in zip(keypoints, descriptors, labels):
-        cluster_groups[lab].append((kp, desc))
+    for img_idx, (image, keypoints, descriptors_raw) in enumerate(
+        tqdm(zip(images, keypoints_img, descriptors_img),
+             total=len(images), desc="Guardando representacion")
+    ):
 
-    # Recorremos clusters
-    for c in range(K):
-        group = cluster_groups[c]
-        if len(group) == 0:
+        # Si no hay descriptores, saltamos
+        if descriptors_raw is None or len(descriptors_raw) == 0:
             continue
 
-        # Ordenar por distancia al centroide (más representativos primero)
-        group_sorted = sorted(
-            group,
-            key=lambda x: np.linalg.norm(x[1] - centers[c])
-        )
+        # ---------------------------------------
+        # 1) NORMALIZAR descriptores (L2) — Obligatorio
+        # ---------------------------------------
+        descriptors_norm = normalize(descriptors_raw, norm="l2")
 
-        # Crear carpeta del cluster
-        cluster_dir = os.path.join(out_dir, f"cluster_{c}")
-        os.makedirs(cluster_dir, exist_ok=True)
+        # ---------------------------------------
+        # 2) PCA + WHITENING — Obligatorio
+        # ---------------------------------------
+        descriptors_pca = pca.transform(descriptors_norm)
 
-        # Guardar n_samples patches
-        for i, (kp, desc) in enumerate(group_sorted[:n_samples]):
+        # ---------------------------------------
+        # 3) Clustering usando descriptores PCA
+        # ---------------------------------------
+        labels = kmeans.predict(descriptors_pca)
+
+        # ---------------------------------------
+        # 4) Distancias al centroide en espacio PCA-whitened
+        # ---------------------------------------
+        distances = np.linalg.norm(descriptors_pca - centers[labels], axis=1)
+
+        # ---------------------------------------
+        # 5) Seleccionar top-n patches más representativos
+        # ---------------------------------------
+        top_idx = np.argsort(distances)[:n_samples]
+
+        for idx in top_idx:
+            kp = keypoints[idx]
+            cluster = labels[idx]
+
             x, y = int(kp.pt[0]), int(kp.pt[1])
 
             patch = image[
-                max(0, y - patch_size) : y + patch_size,
-                max(0, x - patch_size) : x + patch_size
+                max(0, y - patch_size): y + patch_size,
+                max(0, x - patch_size): x + patch_size
             ]
 
-            # Guardar archivo
-            fname = os.path.join(cluster_dir, f"patch_{i}.png")
+            cluster_dir = os.path.join(out_dir, f"cluster_{cluster}")
+            os.makedirs(cluster_dir, exist_ok=True)
+
+            fname = os.path.join(
+                cluster_dir,
+                f"img{img_idx}_patch{cluster_counters[cluster]}.png"
+            )
             cv2.imwrite(fname, cv2.cvtColor(patch, cv2.COLOR_RGB2BGR))
 
-        print(f"Cluster {c}: guardados {min(n_samples, len(group))} patches")
+            cluster_counters[cluster] += 1
 
-    print("✔ Todos los patches representativos guardados.")
-
-
-
-# -------------------------------
-# EJEMPLO DE USO
-# -------------------------------
-
-# Tomar una imagen de tu test_df
-sample_img = next(image_generator(root, test_df))
-kp, desc = dense_sift(sample_img)
-
-save_representative_patches(
-    image=sample_img,
-    keypoints=kp,
-    descriptors=desc,
-    kmeans=kmeans,      # tu MiniBatchKMeans ya entrenado
-    out_dir="patches",
-    patch_size=32,
-    n_samples=15        # puedes poner 10, 20, 50…
-)
+    print("✔ Patches representativos guardados con PCA + Whitening + Normalization.")
+if __name__ == "__main__":
+    images = []
+    kps = []
+    descs = []
+    root = "../../toy_dataset"
+    df = cargar_labels()
+    subset_size = 1000
+    train_df, test_df = split_train_test(df, size = subset_size, prop_test=0.2, random_state=42)
+    for img in tqdm(image_generator(root, test_df), desc="Dense SIFT para guardar patches"):
+        kp, desc = dense_sift(img)
+        images.append(img)
+        kps.append(kp)
+        descs.append(desc)
+    kmeans = joblib.load("kmeans_bow_512.pkl")
+    save_representative_patches(
+        images=images,
+        keypoints_img=kps,
+        descriptors_img=descs,
+        pca=joblib.load("pca_sift_32.pkl"),
+        kmeans=kmeans,      # tu MiniBatchKMeans ya entrenado
+        out_dir="../../patches_norm_512_gigante",
+        patch_size=16,
+        n_samples=3      # puedes poner 10, 20, 50…
+    )

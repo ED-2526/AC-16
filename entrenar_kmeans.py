@@ -113,8 +113,8 @@ def visualize_inertia(desc_train, desc_test, Ks):
     score_test = []
     for K in tqdm(Ks, desc="Entrenando modelos con distintas K"):
         kmeans = train_kmeans(desc_train, n_clusters=K)
-        score_train.append(kmeans.score(desc_train))
-        score_test.append(kmeans.score(desc_test))
+        score_train.append(kmeans.score(desc_train)/len(desc_train))
+        score_test.append(kmeans.score(desc_test)/len(desc_test))
     plt.plot(Ks, score_train, marker='o', label='Train')
     plt.plot(Ks, score_test, marker='x', label='Test')
     plt.xlabel('Número de clusters K')
