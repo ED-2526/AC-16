@@ -10,6 +10,18 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import normalize
 from sklearn.decomposition import PCA
 
+def filtrar_gradiente(gray, kps, percentil= 30):
+    mag = cv2.Sobel(gray, cv2.CV_32F, 1, 0)**2 + cv2.Sobel(gray, cv2.CV_32F, 0, 1)**2
+    mag = np.sqrt(mag)
+    threshold = np.percentile(mag, percentil)
+    return [kp for kp in kps if mag[int(kp.pt[1]), int(kp.pt[0])] >= threshold]
+
+def filtrar_norma(descriptors, kps, threshold=0.1):
+    desc_norm = np.linalg.norm(descriptors, axis=1)
+    mask = desc_norm > threshold
+    descriptors = descriptors[mask]
+    kps = [kp for i, kp in enumerate(kps) if mask[i]]
+    return kps, descriptors
 def image_generator(root, df, file_col="FILE"):
     for arx in df[file_col]:
         path = os.path.join(root, arx)
@@ -32,7 +44,7 @@ def reescalar(image, max_size=512):
     return resized_image, scale_factor
 
 
-def dense_sift(image, step=12, patch_size=16):
+def dense_sift(image, step=16, patch_size=24):
     image, _ = reescalar(image)
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.shape[2] == 3 else image
@@ -50,10 +62,13 @@ def dense_sift(image, step=12, patch_size=16):
 
     # Crear extractor SIFT
     sift = cv2.SIFT_create()
-
+    keypoints = filtrar_gradiente(gray, keypoints, percentil=30)
     # Extraer descriptores
     keypoints, descriptors = sift.compute(gray, keypoints)
-
+    keypoints, descriptors = filtrar_norma(descriptors, keypoints, threshold=0.1)
+    descriptors = descriptors.astype(np.float32) + 1e-7
+    descriptors = descriptors / descriptors.sum(axis=1, keepdims=True)
+    descriptors = np.sqrt(descriptors)      
     return keypoints, descriptors
 
 
@@ -70,14 +85,14 @@ def split_train_test(df, size = None, prop_test=0.2, random_state=42):
     train_df = subset_df[:int(size*(1-prop_test))]
     return train_df, test_df
 
-def preprocess_cluster(desc, pca = None):
-    desc = normalize(desc, norm="l2")
+def preprocess_cluster(desc, pca = None):  
     if pca is None:
         pca = PCA(n_components=64, whiten=True)
         desc = pca.fit_transform(desc)
         joblib.dump(pca, "pca_sift_64.pkl")
     else:
         desc = pca.transform(desc)
+    desc = normalize(desc, norm="l2")
     return desc, pca
 
 def extract_descriptors(df, root):

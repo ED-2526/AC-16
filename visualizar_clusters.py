@@ -30,13 +30,12 @@ def save_representative_patches(
         # ---------------------------------------
         # 1) NORMALIZAR descriptores (L2) — Obligatorio
         # ---------------------------------------
-        descriptors_norm = normalize(descriptors_raw, norm="l2")
 
         # ---------------------------------------
         # 2) PCA + WHITENING — Obligatorio
         # ---------------------------------------
-        descriptors_pca = pca.transform(descriptors_norm)
-
+        descriptors_pca = pca.transform(descriptors_raw)
+        descriptors_pca = normalize(descriptors_pca, norm="l2")
         # ---------------------------------------
         # 3) Clustering usando descriptores PCA
         # ---------------------------------------
@@ -83,19 +82,19 @@ if __name__ == "__main__":
     df = cargar_labels()
     subset_size = 1000
     train_df, test_df = split_train_test(df, size = subset_size, prop_test=0.2, random_state=42)
-    for img in tqdm(image_generator(root, test_df), desc="Dense SIFT para guardar patches"):
+    for img in tqdm(image_generator(root, test_df), desc="Dense SIFT para guardar patches", total=len(test_df)):
         kp, desc = dense_sift(img)
         images.append(img)
         kps.append(kp)
         descs.append(desc)
-    kmeans = joblib.load("kmeans_bow_512.pkl")
+    kmeans = joblib.load("kmeans_bow_256.pkl")
     save_representative_patches(
         images=images,
         keypoints_img=kps,
         descriptors_img=descs,
-        pca=joblib.load("pca_sift_32.pkl"),
+        pca=joblib.load("pca_sift_64.pkl"),
         kmeans=kmeans,      # tu MiniBatchKMeans ya entrenado
-        out_dir="../../patches_norm_512_gigante",
-        patch_size=16,
+        out_dir="../../patches_amen",
+        patch_size=24,
         n_samples=3      # puedes poner 10, 20, 50…
     )

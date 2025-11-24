@@ -60,19 +60,15 @@ import matplotlib.pyplot as plt
 times_list = []
 features = []   # versión original
 size_list = []
-for img in tqdm(image_generator(root, df), desc="Dense SIFT (lista)"):
+for img in tqdm(image_generator(root, df), desc="Dense SIFT (lista)", total=2500):
     t0 = time()
     kp, desc = dense_sift(img)
-    l = len(desc) if desc is not None else 0
     features.extend(desc)
     times_list.append(time() - t0)
-    size_list.append(l)
     i += 1
-    if i >= 20:
+    if i >= 2500:
         break
-print(np.mean(size_list))
-print(size_list)
-def smooth_mean(values, block=20):
+def smooth_mean(values, block=12):
     values = np.array(values)
     n = len(values) // block
     return values[:n*block].reshape(n, block).mean(axis=1)

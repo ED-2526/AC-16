@@ -67,6 +67,7 @@ def analisi_metadatos(df, df_meta):
     plt.title('Histograma tamaños')
     plt.show()
     print(df.describe())
+    df_meta["size"] = df_meta["width"] * df_meta["height"]
     print(df_meta.describe())
 df = cargar_labels()
 print(df.head())
@@ -76,7 +77,8 @@ print(df.head())
 #joblib.dump(df_m, "metadades.pkl")
 #print(df_m.head())
 df_meta = joblib.load("metadades.pkl")
-#analisi_metadatos(df, df_meta)
+analisi_metadatos(df, df_meta)
+"""
 def load_small_image(path, size=(128, 128)):
     try:
         with Image.open(path) as img:
@@ -137,4 +139,4 @@ XY = pca2.fit_transform(X_scaled)
 
 plt.scatter(XY[:,0], XY[:,1], c=labels, s=2)
 plt.title("Clusters por histograma + contraste")
-plt.show()
+plt.show()"""
