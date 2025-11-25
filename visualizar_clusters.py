@@ -94,7 +94,7 @@ if __name__ == "__main__":
         descriptors_img=descs,
         pca=joblib.load("pca_sift_64.pkl"),
         kmeans=kmeans,      # tu MiniBatchKMeans ya entrenado
-        out_dir="../../patches_amen",
-        patch_size=24,
-        n_samples=3      # puedes poner 10, 20, 50…
+        out_dir="../../patches_amen_2",
+        patch_size=16,
+        n_samples=1      # puedes poner 10, 20, 50…
     )

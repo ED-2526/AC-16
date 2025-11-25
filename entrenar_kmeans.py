@@ -9,14 +9,56 @@ from sklearn.cluster import MiniBatchKMeans
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import normalize
 from sklearn.decomposition import PCA
+from skimage.filters.rank import entropy
+from skimage.morphology import disk
 
-def filtrar_gradiente(gray, kps, percentil= 30):
-    mag = cv2.Sobel(gray, cv2.CV_32F, 1, 0)**2 + cv2.Sobel(gray, cv2.CV_32F, 0, 1)**2
-    mag = np.sqrt(mag)
+
+
+def kp_entropy_score(gray, kp, patch_size=12):
+    x, y = int(kp.pt[0]), int(kp.pt[1])
+    patch = gray[max(0,y-patch_size):y+patch_size,
+                 max(0,x-patch_size):x+patch_size]
+
+    if patch.shape[0] < 2*patch_size:
+        return 0  # patch incompleto → descartar
+
+    e = entropy(patch, disk(3)).mean()
+    return float(e)
+
+def filtrar_entropia(gray, kps, low_p=10, high_p=90, patch_size=12):
+    if len(kps) == 0:
+        return []
+
+    # Medir entropía en todos los keypoints
+    entropies = np.array([kp_entropy_score(gray, kp, patch_size) for kp in kps])
+
+    # Calcular percentiles
+    low_t = np.percentile(entropies, low_p)
+    high_t = np.percentile(entropies, high_p)
+
+    # Aceptar solo entropías intermedias
+    mask = (entropies >= low_t) & (entropies <= high_t)
+
+    kps_f = [kp for (kp, keep) in zip(kps, mask) if keep]
+
+    return kps_f
+
+def filtrar_gradiente(gray, kps, percentil=30):
+    # blur para eliminar ruido del resize
+    gray_blur = cv2.GaussianBlur(gray, (5,5), 0)
+
+    gx = cv2.Sobel(gray_blur, cv2.CV_32F, 1, 0)
+    gy = cv2.Sobel(gray_blur, cv2.CV_32F, 0, 1)
+    mag = np.sqrt(gx * gx + gy * gy)
+
     threshold = np.percentile(mag, percentil)
-    return [kp for kp in kps if mag[int(kp.pt[1]), int(kp.pt[0])] >= threshold]
 
-def filtrar_norma(descriptors, kps, threshold=0.1):
+    return [kp for kp in kps
+            if mag[int(kp.pt[1]), int(kp.pt[0])] >= threshold]
+
+def filtrar_norma(descriptors, kps, threshold=0.2):
+    if descriptors is None or len(descriptors) == 0:
+        return [], None
     desc_norm = np.linalg.norm(descriptors, axis=1)
     mask = desc_norm > threshold
     descriptors = descriptors[mask]
@@ -30,6 +72,8 @@ def image_generator(root, df, file_col="FILE"):
         else:
             img = cv2.imread(path)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            print(path)
+            entropies = histograma_entropia(img, patch_size=12, step=12)
             yield img
 
 def reescalar(image, max_size=512):
@@ -44,7 +88,7 @@ def reescalar(image, max_size=512):
     return resized_image, scale_factor
 
 
-def dense_sift(image, step=16, patch_size=24):
+def dense_sift(image, step=12, patch_size=16):
     image, _ = reescalar(image)
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.shape[2] == 3 else image
@@ -52,23 +96,31 @@ def dense_sift(image, step=16, patch_size=24):
         gray = image
     
     h, w = gray.shape
-
     # Crear keypoints en rejilla regular
     keypoints = []
-    for y in range(0, h, step):
-        for x in range(0, w, step):
+    for y in range(patch_size, h - patch_size, step):
+        for x in range(patch_size, w - patch_size, step):
             kp = cv2.KeyPoint(float(x), float(y), float(patch_size))
             keypoints.append(kp)
 
     # Crear extractor SIFT
     sift = cv2.SIFT_create()
+    #keypoints = filtrar_textura(gray, keypoints, patch=patch_size, threshold=28.0)
     keypoints = filtrar_gradiente(gray, keypoints, percentil=30)
+    scores = np.array([kp_entropy_score(gray, kp) for kp in keypoints])
+    thr = np.percentile(scores, 30)
+    keypoints = [kp for kp, s in zip(keypoints, scores) if s >= thr]
     # Extraer descriptores
     keypoints, descriptors = sift.compute(gray, keypoints)
-    keypoints, descriptors = filtrar_norma(descriptors, keypoints, threshold=0.1)
-    descriptors = descriptors.astype(np.float32) + 1e-7
-    descriptors = descriptors / descriptors.sum(axis=1, keepdims=True)
-    descriptors = np.sqrt(descriptors)      
+    keypoints, descriptors = filtrar_norma(descriptors, keypoints, threshold=0.2)
+    if descriptors is None or len(descriptors) == 0:
+        print("⚠ No se extrajeron descriptores válidos.")
+        return keypoints, None
+    descriptors = descriptors.astype(np.float32)
+    descriptors += 1e-7
+    descriptors /= descriptors.sum(axis=1, keepdims=True)
+    descriptors = np.sqrt(descriptors)
+    descriptors = normalize(descriptors, norm="l2")
     return keypoints, descriptors
 
 
@@ -76,7 +128,7 @@ root = "../../toy_dataset"
 df = cargar_labels()
 features = []
 
-def split_train_test(df, size = None, prop_test=0.2, random_state=42):
+def split_train_test(df, size = None, prop_test=0.1, random_state=42):
     size = min(size, len(df))
     if size is None:
         size = len(df)
@@ -137,6 +189,71 @@ def visualize_inertia(desc_train, desc_test, Ks):
     plt.title('Codo de KMeans')
     plt.show()
     return score_train, score_test
+
+
+def dense_kps(image, step=12, patch_size=16):
+    """Solo crea keypoints (sin SIFT), útil para análisis."""
+    image, _ = reescalar(image)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    h, w = gray.shape
+    keypoints = []
+
+    for y in range(patch_size, h - patch_size, step):
+        for x in range(patch_size, w - patch_size, step):
+            keypoints.append(cv2.KeyPoint(float(x), float(y), float(patch_size)))
+
+    return image, gray, keypoints
+
+def histograma_entropia(image, patch_size=16, step=12, show_patches=True):
+    """
+    Calcula y muestra el histograma de entropía de los keypoints de una imagen.
+    """
+    image_res, gray, kps = dense_kps(image, step=step, patch_size=patch_size)
+
+    entropies = []
+    for kp in kps:
+        entropies.append(kp_entropy_score(gray, kp, patch_size=patch_size))
+
+    entropies = np.array(entropies)
+
+    # ---- HISTOGRAMA ----
+    plt.figure(figsize=(10,5))
+    plt.hist(entropies, bins=50, color="royalblue")
+    plt.title("Histograma de entropía por keypoint")
+    plt.xlabel("Entropía")
+    plt.ylabel("Frecuencia")
+    plt.grid(True)
+    plt.show()
+
+    print(f"✔ Keypoints analizados: {len(entropies)}")
+    print(f"✔ Entropía mínima: {entropies.min():.3f}")
+    print(f"✔ Entropía media:  {entropies.mean():.3f}")
+    print(f"✔ Entropía máx:    {entropies.max():.3f}")
+
+    # ---- OPCIONAL: visualizar los patches de alta entropía ----
+    if show_patches:
+        top_idx = np.argsort(entropies)[-12:]   # 12 patches de mayor entropía
+        fig, axs = plt.subplots(3, 4, figsize=(8,6))
+        axs = axs.ravel()
+
+        for i, idx in enumerate(top_idx):
+            kp = kps[idx]
+            x, y = int(kp.pt[0]), int(kp.pt[1])
+            p = image_res[
+                y-patch_size:y+patch_size,
+                x-patch_size:x+patch_size
+            ]
+            axs[i].imshow(p, cmap="gray")
+            axs[i].set_axis_off()
+            axs[i].set_title(f"{entropies[idx]:.2f}")
+
+        plt.suptitle("Patches con alta entropía")
+        plt.tight_layout()
+        plt.show()
+
+    return entropies
+
 if __name__ == "__main__":
     subset_size = 2000
     prop_test = 0.2
@@ -144,7 +261,7 @@ if __name__ == "__main__":
         df, root,
         subset_size=subset_size,
         prop_test=prop_test,
-        dir_pca="pca_sift_64.pkl"
+        dir_pca= None
     )
     Ks = [64, 128, 256, 512, 1024]
     visualize_inertia(descriptors_train, descriptors_test, Ks)
