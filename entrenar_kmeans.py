@@ -13,7 +13,76 @@ from skimage.filters.rank import entropy
 from skimage.morphology import disk
 from sklearn.cluster import KMeans
 import hashlib
+import psutil
+import pandas as pd
 
+#------------------- profiler -------------------
+
+def extract_descriptors_con_medicion(df, root, debug=False):
+    tiempos = []
+    memorias = []
+
+    desc_total = []
+
+    proceso = psutil.Process(os.getpid())
+
+    for img in tqdm(image_generator(root, df), desc="DenseSIFT con medición", total=len(df)):
+        t0 = time()
+
+        kp, desc = dense_sift(img, debug=debug)
+
+        t1 = time()
+        tiempos.append(t1 - t0)
+
+        mem_actual = proceso.memory_info().rss / (1024 * 1024)   # MB
+        memorias.append(mem_actual)
+
+        if desc is not None:
+            desc_total.append(desc)
+
+    if len(desc_total) > 0:
+        desc_total = np.vstack(desc_total)
+    else:
+        desc_total = np.empty((0, 128), dtype=np.float32)
+
+    # Guardar métricas
+    df_medidas = pd.DataFrame({
+        "iter": np.arange(len(tiempos)),
+        "tiempo": tiempos,
+        "memoria_MB": memorias
+    })
+    df_medidas.to_csv("medicion_dense_sift.csv", index=False)
+
+    return desc_total, tiempos, memorias
+
+def plot_tiempos_y_memoria(tiempos, memorias):
+    iters = np.arange(len(tiempos))
+
+    plt.figure(figsize=(12, 5))
+    plt.plot(iters, tiempos, label="Tiempo por iteración", linewidth=1)
+    plt.xlabel("Iteración")
+    plt.ylabel("Tiempo (s)")
+    plt.title("Tiempo por iteración de DenseSIFT")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+    plt.figure(figsize=(12, 5))
+    plt.plot(iters, memorias, label="Memoria RAM (MB)", color="purple", linewidth=1)
+    plt.xlabel("Iteración")
+    plt.ylabel("Memoria (MB)")
+    plt.title("Consumo de RAM por iteración")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+    plt.figure(figsize=(6, 6))
+    plt.scatter(memorias, tiempos, s=10, alpha=0.5)
+    plt.xlabel("Memoria (MB)")
+    plt.ylabel("Tiempo (s)")
+    plt.title("Relación Memoria ↔ Tiempo (comportamiento de crecimiento)")
+    plt.grid(True)
+    plt.show()
 
 # ------------------ helpers ------------------
 
@@ -321,6 +390,22 @@ def visualize_inertia(desc_train, desc_test, Ks):
     return score_train, score_test
 
 
+def compute_vlad(descriptors, kmeans):
+    if descriptors is None or len(descriptors) == 0:
+        return None
+    centers = kmeans.cluster_centers_
+    K, D = centers.shape
+    labels = kmeans.predict(descriptors)
+    vlad = np.zeros((K, D), dtype=np.float32)
+    for i, desc in enumerate(descriptors):
+        c = labels[i]
+        residual = desc - centers[c]
+        vlad[c] += residual
+    vlad = np.sign(vlad) * np.sqrt(np.abs(vlad) + 1e-12)
+    vlad = vlad.reshape(-1)
+    vlad /= (np.linalg.norm(vlad) + 1e-12)
+    return vlad
+
 def dense_kps(image, step=8, patch_size=16):
     """Solo crea keypoints (sin SIFT), útil para análisis."""
     image, _ = reescalar(image)
@@ -397,13 +482,20 @@ def histograma_entropia(image, patch_size=16, step=8, show_patches=False):
 
 
 if __name__ == "__main__":
-    subset_size = 3000
+    """subset_size = 3000
     prop_test = 0.2
     descriptors_train, descriptors_test = features_para_kmeans(
         df, root,
         subset_size=subset_size,
         prop_test=prop_test,
         dir_pca= None
+    )"""
+    subset_size = 10000   # o lo que quieras para medir
+    df_train = df.sample(n=subset_size, random_state=42)
+    descs, tiempos, memorias = extract_descriptors_con_medicion(
+        df_train, root, debug=False
     )
-    Ks = [64, 128, 256, 512, 1024]
-    visualize_inertia(descriptors_train, descriptors_test, Ks)
+
+    plot_tiempos_y_memoria(tiempos, memorias)
+    #Ks = [64, 128, 256, 512, 1024]
+    #visualize_inertia(descriptors_train, descriptors_test, Ks)
