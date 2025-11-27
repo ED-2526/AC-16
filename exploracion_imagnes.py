@@ -69,6 +69,7 @@ def analisi_metadatos(df, df_meta):
     print(df.describe())
     df_meta["size"] = df_meta["width"] * df_meta["height"]
     print(df_meta.describe())
+    df_meta[["file", "width", "height", "size"]].to_csv("metadatos.csv", index=False)
 df = cargar_labels()
 print(df.head())
 #for img in image_generator("../../toy_dataset", df):

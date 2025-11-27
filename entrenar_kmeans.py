@@ -12,8 +12,46 @@ from sklearn.decomposition import PCA
 from skimage.filters.rank import entropy
 from skimage.morphology import disk
 
+def edge_density(gray, kp, patch_size=12, thr=10):
+    x, y = int(kp.pt[0]), int(kp.pt[1])
+    patch = gray[y-patch_size:y+patch_size, x-patch_size:x+patch_size]
+    if patch.shape[0] < 2*patch_size: return 0
+    
+    gx = cv2.Sobel(patch, cv2.CV_32F, 1, 0)
+    gy = cv2.Sobel(patch, cv2.CV_32F, 0, 1)
+    mag = np.sqrt(gx*gx + gy*gy)
 
+    return np.mean(mag > thr)
 
+def ver_patch(image, keypoint, patch_size=32, filename= None):
+    x, y = int(keypoint.pt[0]), int(keypoint.pt[1])
+    patch = image[
+        max(0, y - patch_size): y + patch_size,
+        max(0, x - patch_size): x + patch_size
+    ]
+    print(f"{filename}: entropy: {kp_entropy_score_fast(cv2.cvtColor(image, cv2.COLOR_RGB2GRAY), keypoint, patch_size=patch_size):.3f}")
+    if filename:
+        cv2.imwrite(filename, cv2.cvtColor(patch, cv2.COLOR_RGB2BGR))
+    return patch
+
+def fast_entropy(gray_patch, bins=16):
+    """
+    Entropía rápida basada en histograma.
+    Mucho más rápida que skimage.filters.rank.entropy.
+    """
+    hist = np.bincount(gray_patch.ravel(), minlength=256).astype(float)
+    hist /= hist.sum() + 1e-8
+    nz = hist[hist > 0]
+    return -(nz * np.log2(nz)).sum()
+def kp_entropy_score_fast(gray, kp, patch_size=12):
+    x, y = int(kp.pt[0]), int(kp.pt[1])
+    patch = gray[y - patch_size:y + patch_size,
+                 x - patch_size:x + patch_size]
+
+    if patch.shape[0] < 2*patch_size or patch.shape[1] < 2*patch_size:
+        return 0.0
+
+    return fast_entropy(patch)
 def kp_entropy_score(gray, kp, patch_size=12):
     x, y = int(kp.pt[0]), int(kp.pt[1])
     patch = gray[max(0,y-patch_size):y+patch_size,
@@ -25,27 +63,10 @@ def kp_entropy_score(gray, kp, patch_size=12):
     e = entropy(patch, disk(3)).mean()
     return float(e)
 
-def filtrar_entropia(gray, kps, low_p=10, high_p=90, patch_size=12):
-    if len(kps) == 0:
-        return []
-
-    # Medir entropía en todos los keypoints
-    entropies = np.array([kp_entropy_score(gray, kp, patch_size) for kp in kps])
-
-    # Calcular percentiles
-    low_t = np.percentile(entropies, low_p)
-    high_t = np.percentile(entropies, high_p)
-
-    # Aceptar solo entropías intermedias
-    mask = (entropies >= low_t) & (entropies <= high_t)
-
-    kps_f = [kp for (kp, keep) in zip(kps, mask) if keep]
-
-    return kps_f
 
 def filtrar_gradiente(gray, kps, percentil=30):
     # blur para eliminar ruido del resize
-    gray_blur = cv2.GaussianBlur(gray, (5,5), 0)
+    gray_blur = cv2.GaussianBlur(gray, (5,5), 10)
 
     gx = cv2.Sobel(gray_blur, cv2.CV_32F, 1, 0)
     gy = cv2.Sobel(gray_blur, cv2.CV_32F, 0, 1)
@@ -67,13 +88,9 @@ def filtrar_norma(descriptors, kps, threshold=0.2):
 def image_generator(root, df, file_col="FILE"):
     for arx in df[file_col]:
         path = os.path.join(root, arx)
-        if not os.path.exists(path):
-            yield None
-        else:
+        if os.path.exists(path):
             img = cv2.imread(path)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            print(path)
-            entropies = histograma_entropia(img, patch_size=12, step=12)
             yield img
 
 def reescalar(image, max_size=512):
@@ -88,7 +105,7 @@ def reescalar(image, max_size=512):
     return resized_image, scale_factor
 
 
-def dense_sift(image, step=12, patch_size=16):
+def dense_sift(image, step=24, patch_size=32):
     image, _ = reescalar(image)
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.shape[2] == 3 else image
@@ -106,10 +123,12 @@ def dense_sift(image, step=12, patch_size=16):
     # Crear extractor SIFT
     sift = cv2.SIFT_create()
     #keypoints = filtrar_textura(gray, keypoints, patch=patch_size, threshold=28.0)
-    keypoints = filtrar_gradiente(gray, keypoints, percentil=30)
-    scores = np.array([kp_entropy_score(gray, kp) for kp in keypoints])
-    thr = np.percentile(scores, 30)
-    keypoints = [kp for kp, s in zip(keypoints, scores) if s >= thr]
+    entropy = [kp_entropy_score_fast(gray, kp, patch_size=patch_size) for kp in keypoints]
+    keypoints = [keypoints[i] for i in np.argsort(entropy)[int(len(keypoints)*0.9):]]
+    keypoints = filtrar_gradiente(gray, keypoints, percentil=40)
+    #scores = np.array([kp_entropy_score_fast(gray, kp, patch_size=patch_size) for kp in keypoints])
+    #thr = np.percentile(scores, 99)
+    #keypoints = [kp for kp, s in zip(keypoints, scores) if s >= thr]
     # Extraer descriptores
     keypoints, descriptors = sift.compute(gray, keypoints)
     keypoints, descriptors = filtrar_norma(descriptors, keypoints, threshold=0.2)
@@ -121,6 +140,8 @@ def dense_sift(image, step=12, patch_size=16):
     descriptors /= descriptors.sum(axis=1, keepdims=True)
     descriptors = np.sqrt(descriptors)
     descriptors = normalize(descriptors, norm="l2")
+    #for i, kp in enumerate(keypoints):
+    #    ver_patch(image, kp, patch_size=patch_size, filename=f"../../patches_test/patch_{i}.png")
     return keypoints, descriptors
 
 
@@ -191,7 +212,7 @@ def visualize_inertia(desc_train, desc_test, Ks):
     return score_train, score_test
 
 
-def dense_kps(image, step=12, patch_size=16):
+def dense_kps(image, step=24, patch_size=32):
     """Solo crea keypoints (sin SIFT), útil para análisis."""
     image, _ = reescalar(image)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -205,7 +226,7 @@ def dense_kps(image, step=12, patch_size=16):
 
     return image, gray, keypoints
 
-def histograma_entropia(image, patch_size=16, step=12, show_patches=True):
+def histograma_entropia(image, patch_size=32, step=24, show_patches=False):
     """
     Calcula y muestra el histograma de entropía de los keypoints de una imagen.
     """
@@ -213,13 +234,23 @@ def histograma_entropia(image, patch_size=16, step=12, show_patches=True):
 
     entropies = []
     for kp in kps:
-        entropies.append(kp_entropy_score(gray, kp, patch_size=patch_size))
+        entropies.append(kp_entropy_score_fast(gray, kp, patch_size=patch_size))
 
     entropies = np.array(entropies)
+    q1 = np.percentile(entropies, 25)
+    q2 = np.percentile(entropies, 50)
+    q3 = np.percentile(entropies, 75)
+    n9 = np.percentile(entropies, 90)
 
     # ---- HISTOGRAMA ----
     plt.figure(figsize=(10,5))
     plt.hist(entropies, bins=50, color="royalblue")
+    plt.axvline(q1, color="orange", linestyle="--", linewidth=2, label=f"Q1 = {q1:.3f}")
+    plt.axvline(q2, color="red", linestyle="--", linewidth=2, label=f"Q2 (mediana) = {q2:.3f}")
+    plt.axvline(q3, color="green", linestyle="--", linewidth=2, label=f"Q3 = {q3:.3f}")
+    plt.axvline(n9, color="purple", linestyle="--", linewidth=2, label=f"P90 = {n9:.3f}")
+
+
     plt.title("Histograma de entropía por keypoint")
     plt.xlabel("Entropía")
     plt.ylabel("Frecuencia")
@@ -255,7 +286,7 @@ def histograma_entropia(image, patch_size=16, step=12, show_patches=True):
     return entropies
 
 if __name__ == "__main__":
-    subset_size = 2000
+    subset_size = 20000
     prop_test = 0.2
     descriptors_train, descriptors_test = features_para_kmeans(
         df, root,

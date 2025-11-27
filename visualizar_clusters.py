@@ -69,7 +69,10 @@ def save_representative_patches(
                 cluster_dir,
                 f"img{img_idx}_patch{cluster_counters[cluster]}.png"
             )
-            cv2.imwrite(fname, cv2.cvtColor(patch, cv2.COLOR_RGB2BGR))
+            try:
+                cv2.imwrite(fname, cv2.cvtColor(patch, cv2.COLOR_RGB2BGR))
+            except Exception as e:
+                print(f"Error saving patch {fname}: {e}")
 
             cluster_counters[cluster] += 1
 
@@ -81,13 +84,20 @@ if __name__ == "__main__":
     root = "../../toy_dataset"
     df = cargar_labels()
     subset_size = 1000
-    train_df, test_df = split_train_test(df, size = subset_size, prop_test=0.2, random_state=42)
+    train_df, test_df = split_train_test(df, size = subset_size, prop_test=1, random_state=42)
+    print(test_df.head())
+    t = 0
     for img in tqdm(image_generator(root, test_df), desc="Dense SIFT para guardar patches", total=len(test_df)):
         kp, desc = dense_sift(img)
         images.append(img)
+        #for k in kp:
+        #    t += 1
+        #    ver_patch(img, k, filename=f"patches/patch_{t}.png")
+        
+        #histograma_entropia(img, patch_size=32, step=24, show_patches=False)
         kps.append(kp)
         descs.append(desc)
-    kmeans = joblib.load("kmeans_bow_256.pkl")
+    kmeans = joblib.load("kmeans_bow_64.pkl")
     save_representative_patches(
         images=images,
         keypoints_img=kps,
@@ -96,5 +106,5 @@ if __name__ == "__main__":
         kmeans=kmeans,      # tu MiniBatchKMeans ya entrenado
         out_dir="../../patches_amen_2",
         patch_size=16,
-        n_samples=1      # puedes poner 10, 20, 50…
+        n_samples= 1  # puedes poner 10, 20, 50…
     )
