@@ -83,8 +83,8 @@ if __name__ == "__main__":
     descs = []
     root = "../../toy_dataset"
     df = cargar_labels()
-    subset_size = 1000
-    train_df, test_df = split_train_test(df, size = subset_size, prop_test=1, random_state=42)
+    subset_size = 10
+    train_df, test_df = split_train_test(df, size = subset_size, prop_test=1, random_state=33)
     print(test_df.head())
     t = 0
     for img in tqdm(image_generator(root, test_df), desc="Dense SIFT para guardar patches", total=len(test_df)):

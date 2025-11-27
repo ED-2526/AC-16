@@ -397,7 +397,7 @@ def histograma_entropia(image, patch_size=16, step=8, show_patches=False):
 
 
 if __name__ == "__main__":
-    subset_size = 1000
+    subset_size = 3000
     prop_test = 0.2
     descriptors_train, descriptors_test = features_para_kmeans(
         df, root,
