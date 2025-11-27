@@ -18,6 +18,30 @@ import pandas as pd
 
 #------------------- profiler -------------------
 
+def binning(values, max_points=10, agg="mean"):
+    """
+    Reduce una señal mediante agregación por ventanas.
+
+    agg puede ser: 'mean', 'median', 'min', 'max'
+    """
+    n = len(values)
+    if n <= max_points:
+        return values  # nada que reducir
+    
+    bin_size = int(np.ceil(n / max_points))
+    values = np.array(values)
+
+    if agg == "mean":
+        return np.array([values[i:i+bin_size].mean() for i in range(0, n, bin_size)])
+    elif agg == "median":
+        return np.array([np.median(values[i:i+bin_size]) for i in range(0, n, bin_size)])
+    elif agg == "min":
+        return np.array([values[i:i+bin_size].min() for i in range(0, n, bin_size)])
+    elif agg == "max":
+        return np.array([values[i:i+bin_size].max() for i in range(0, n, bin_size)])
+    else:
+        raise ValueError("agg debe ser mean, median, min o max")
+
 def extract_descriptors_con_medicion(df, root, debug=False):
     tiempos = []
     memorias = []
@@ -55,32 +79,39 @@ def extract_descriptors_con_medicion(df, root, debug=False):
 
     return desc_total, tiempos, memorias
 
-def plot_tiempos_y_memoria(tiempos, memorias):
-    iters = np.arange(len(tiempos))
+def graficar_mediciones_binned(csv_path=None, tiempos=None, memorias=None,
+                               max_points=2000, agg="mean"):
 
-    plt.figure(figsize=(12, 5))
-    plt.plot(iters, tiempos, label="Tiempo por iteración", linewidth=1)
+    # cargar datos igual que antes...
+    if csv_path is not None:
+        df = pd.read_csv(csv_path)
+        tiempos = df["tiempo"].values
+        memorias = df["memoria_MB"].values
+        iters = df["iter"].values
+    else:
+        iters = np.arange(len(tiempos))
+
+    # aplicar binning
+    tiempos_b = binning(tiempos, max_points=max_points, agg=agg)
+    memorias_b = binning(memorias, max_points=max_points, agg=agg)
+
+    # nuevo eje de iteraciones binned
+    iters_b = np.linspace(iters.min(), iters.max(), len(tiempos_b))
+
+    # --- gráficos ---
+    plt.figure(figsize=(12,5))
+    plt.plot(iters_b, tiempos_b)
+    plt.title(f"Tiempo por iteración (binning={agg})")
     plt.xlabel("Iteración")
     plt.ylabel("Tiempo (s)")
-    plt.title("Tiempo por iteración de DenseSIFT")
     plt.grid(True)
-    plt.legend()
     plt.show()
 
-    plt.figure(figsize=(12, 5))
-    plt.plot(iters, memorias, label="Memoria RAM (MB)", color="purple", linewidth=1)
+    plt.figure(figsize=(12,5))
+    plt.plot(iters_b, memorias_b)
+    plt.title(f"Memoria (binning={agg})")
     plt.xlabel("Iteración")
     plt.ylabel("Memoria (MB)")
-    plt.title("Consumo de RAM por iteración")
-    plt.grid(True)
-    plt.legend()
-    plt.show()
-
-    plt.figure(figsize=(6, 6))
-    plt.scatter(memorias, tiempos, s=10, alpha=0.5)
-    plt.xlabel("Memoria (MB)")
-    plt.ylabel("Tiempo (s)")
-    plt.title("Relación Memoria ↔ Tiempo (comportamiento de crecimiento)")
     plt.grid(True)
     plt.show()
 
@@ -490,12 +521,12 @@ if __name__ == "__main__":
         prop_test=prop_test,
         dir_pca= None
     )"""
-    subset_size = 10000   # o lo que quieras para medir
-    df_train = df.sample(n=subset_size, random_state=42)
-    descs, tiempos, memorias = extract_descriptors_con_medicion(
-        df_train, root, debug=False
-    )
+    #subset_size = 26000   # o lo que quieras para medir
+    #df_train = df.sample(n=subset_size, random_state=42)
+    #descs, tiempos, memorias = extract_descriptors_con_medicion(
+    #    df_train, root, debug=False
+    #)
 
-    plot_tiempos_y_memoria(tiempos, memorias)
+    graficar_mediciones_binned(csv_path="medicion_dense_sift.csv", max_points=150, agg="mean")
     #Ks = [64, 128, 256, 512, 1024]
     #visualize_inertia(descriptors_train, descriptors_test, Ks)
