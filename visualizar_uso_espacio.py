@@ -63,7 +63,7 @@ size_list = []
 for img in tqdm(image_generator(root, df), desc="Dense SIFT (lista)", total=2500):
     t0 = time()
     kp, desc = dense_sift(img)
-    features.extend(desc)
+    features = np.vstack([features, desc]) if len(features) > 0 else desc
     times_list.append(time() - t0)
     i += 1
     if i >= 2500:

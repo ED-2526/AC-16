@@ -23,7 +23,7 @@ root = "../../toy_dataset"
 df = cargar_labels().head(1000)
 X_arx = df[["FILE"]]
 y = df[["CLEAN_DATE"]]
-X_arx_train, y_train, X_arx_test, y_test = train_test_split(X_arx, y, test_size= 0.3, random_state=42)
+X_arx_train, y_train, X_arx_test, y_test = train_test_split(X_arx, y, test_size=0.3, random_state=42)
 print(X_arx_train.shape, y_train.shape)
 
 
