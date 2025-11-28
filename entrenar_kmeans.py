@@ -316,7 +316,7 @@ def reescalar(image, max_size=512):
     resized_image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
     return resized_image, scale_factor
 
-
+#hellinger
 def rootsift(descriptors):
     desc = descriptors.astype(np.float32)
     desc /= (desc.sum(axis=1, keepdims=True) + 1e-12)
@@ -329,27 +329,31 @@ def rootsift(descriptors):
 
 def dense_sift(image, step=8, patch_size=16, debug=False):
     image, _ = reescalar(image)
-    if len(image.shape) == 3:
+    if len(image.shape) == 3: #de color a balnco y negro
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY) if image.shape[2] == 3 else image
     else:
         gray = image
 
     h, w = gray.shape
+
     # Crear keypoints en rejilla regular
     keypoints = []
-    for y in range(patch_size, h - patch_size, step):
+    for y in range(patch_size, h - patch_size, step): #no queremos cojer puntos de los bordes
         for x in range(patch_size, w - patch_size, step):
             kp = cv2.KeyPoint(float(x), float(y), float(patch_size))
             keypoints.append(kp)
 
-    sift = cv2.SIFT_create()
+    sift = cv2.SIFT_create() #algoritme per descriure els pts
     
+    # creem el nom de la img que anirà dins de cada carpeta (les carpetes son els filtres). Aquest nom serà una carpeta que contindrà tots els punts que no han passat el filtre ()
     if debug:
         n = unique_image_id(image)
         inicio = {kp_id(kp): kp for kp in keypoints}
-        
-    keypoints = filtrar_gradiente(gray, keypoints, percentil=40)
+    
+    # 1) Primer filtre: aquí estem filtran pels que tenen gradient més gran que 40, es altres no els volem    
+    keypoints = filtrar_gradiente(gray, keypoints, percentil=40) 
 
+ # anem a guradar els punts que no han passat aquest primer filtre
     if debug:
         # 1) gradient
         n_key = {kp_id(kp): kp for kp in keypoints}
@@ -358,16 +362,16 @@ def dense_sift(image, step=8, patch_size=16, debug=False):
         removed_kps = [inicio[k] for k in removed_ids]
         debug_dump(removed_kps, image, gray, patch_size, f"../../debug/1gradiente/{n}")
 
-    # 2) energía
-    entropy_vals = np.array([kp_entropy_score_fast(gray, kp, patch_size=patch_size) for kp in keypoints])
-    thr = np.percentile(entropy_vals, 75)
-    if debug:
+    # 2) Segon filtre: ordena energía
+    entropy_vals = np.array([kp_entropy_score_fast(gray, kp, patch_size=patch_size) for kp in keypoints]) # fa un array amb l'energia que te cada punt en el mateix ordre.
+    thr = np.percentile(entropy_vals, 75) #decidim el threshold
+    if debug: #guarda els punts a la carpeta del filtre energia
         idx = np.argsort(entropy_vals)
         os.makedirs(f"../../debug/2energia/{n}/", exist_ok=True)
         for j, i in enumerate(idx):
             if entropy_vals[i] < thr:
                 ver_patch(image, keypoints[i], patch_size=patch_size, filename=f"../../debug/2energia/{n}/{j}_{entropy_vals[i]:.2f}.png")
-    keypoints = [kp for kp, s in zip(keypoints, entropy_vals) if s >= thr]
+    keypoints = [kp for kp, s in zip(keypoints, entropy_vals) if s >= thr] #recorre els dos arrays alhora i els que passen el threshold els guarda a keypoints
 
     # 3) estructura
     score = np.array([structured_score(gray, kp, patch_size=patch_size) for kp in keypoints])
@@ -406,12 +410,6 @@ def dense_sift(image, step=8, patch_size=16, debug=False):
 
 
 # ------------------ resto del pipeline ------------------
-
-root = "../../toy_dataset"
-df = cargar_labels()
-features = []
-
-
 def split_train_test(df, size=None, prop_test=0.1, random_state=42):
     size = min(size, len(df)) if size is not None else len(df)
     subset_df = df.sample(n=size, random_state=random_state)
@@ -577,6 +575,8 @@ def histograma_entropia(image, patch_size=16, step=8, show_patches=False):
 
 
 if __name__ == "__main__":
+    root = "../../toy_dataset"
+    df = cargar_labels()
     pca = entrenar_pca(root, df, N_desc=200000, n_components=64)
     desc, index_img = escribir_descriptores_pca_en_memmap(df, root, pca, max_desc=300)
     #print(desc.shape)

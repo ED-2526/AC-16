@@ -16,7 +16,7 @@ def clean_date(txt):
         else:
             n1 = str(n1)
             n2 = str(n2)
-            if len(n2) != 2: # solo son un digito, osea la unidad
+            if len(n2) != 2:
                 return int(res.group(1)) + int(res.group(3))
             return int((int(n1)+int(n1[:-2] + n2))/2)
     res = re.search(r"(\d+)", txt)
@@ -53,7 +53,7 @@ def cargar_labels(path= "labels.csv"):
 
 if __name__ == "__main__":
     df = cargar_labels()
-    print(df)
+    print(df.isna().sum())
     plt.hist(df["CLEAN_DATE"], bins= 500, density=True)
     plt.xlabel('Año')
     plt.title('Histograma años')
