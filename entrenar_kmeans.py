@@ -20,14 +20,14 @@ import pandas as pd
 def crear_memmap_para_descriptores(n_imagenes, max_desc_por_imagen=300, pca_dim=64):
     N_total = n_imagenes * max_desc_por_imagen
     mm = np.memmap(
-        "descriptors.dat",
+        "descriptors.dat", #arxiu on es guardarà els descriptors eficientment (s'accedeix com un array) en el disc
         dtype='float32',
         mode='w+',
         shape=(N_total, pca_dim)
     )
     return mm, N_total
 
-def entrenar_pca(root, df, N_desc, n_components=64):
+def entrenar_pca(root, df, N_desc, n_components=64): #per reduir dimensionalitat
     descriptors = []
     samples = 0
     for img in tqdm(image_generator(root, df), desc="Extrayendo descriptores para PCA", total=N_desc//300):
@@ -47,11 +47,13 @@ def escribir_descriptores_pca_en_memmap(df, root, pca, max_desc=300):
     n_imagenes = len(df)
     pca_dim = pca.n_components_
 
+    #cree estructura memmap
     mm, N_total = crear_memmap_para_descriptores(n_imagenes, max_desc, pca_dim)
 
     img_index = {}
     pointer = 0
 
+    #per cada img extrau sift, aplica pca, normalitxa (l2) i escriu al memmap
     for i, img in enumerate(tqdm(image_generator(root, df), desc="PCA + memmap")):
         kp, desc = dense_sift(img, debug=False)
         if desc is None or desc.shape[0] == 0:
@@ -65,7 +67,7 @@ def escribir_descriptores_pca_en_memmap(df, root, pca, max_desc=300):
 
         # escribir en el memmap
         mm[pointer : pointer + n] = desc_pca
-
+        
         img_index[i] = (pointer, pointer + n)
         pointer += n
 
@@ -82,10 +84,10 @@ def escribir_descriptores_pca_en_memmap(df, root, pca, max_desc=300):
 
     joblib.dump(img_index, "index_descriptores_pca.pkl")
     mm.flush()
-    return mm2, img_index
+    return mm2, img_index #mantenim l'index per saber a quina img pertany cada descriptor
 #------------------- profiler -------------------
 
-def binning(values, max_points=10, agg="mean"):
+def binning(values, max_points=10, agg="mean"): #per mirar el t que tarda en blocs
     n = len(values)
     if n <= max_points:
         return values  # nada que reducir
@@ -179,10 +181,10 @@ def graficar_mediciones_binned(csv_path=None, tiempos=None, memorias=None,
 
 # ------------------ helpers ------------------
 
-def kp_id(kp):
+def kp_id(kp): #ids
     return (int(round(kp.pt[0])), int(round(kp.pt[1])), int(round(kp.size)))
 
-def unique_image_id(image):
+def unique_image_id(image): #hash
     h = hashlib.sha1(image.tobytes()).hexdigest()
     return h[:12] 
 
