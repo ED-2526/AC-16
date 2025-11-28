@@ -15,15 +15,77 @@ from sklearn.cluster import KMeans
 import hashlib
 import psutil
 import pandas as pd
+#------------------- memmaping ------------------
 
+def crear_memmap_para_descriptores(n_imagenes, max_desc_por_imagen=300, pca_dim=64):
+    N_total = n_imagenes * max_desc_por_imagen
+    mm = np.memmap(
+        "descriptors.dat",
+        dtype='float32',
+        mode='w+',
+        shape=(N_total, pca_dim)
+    )
+    return mm, N_total
+
+def entrenar_pca(root, df, N_desc, n_components=64):
+    descriptors = []
+    samples = 0
+    for img in tqdm(image_generator(root, df), desc="Extrayendo descriptores para PCA", total=N_desc//300):
+        kp, desc = dense_sift(img, debug=False)
+        if desc is not None:
+            descriptors.append(desc)
+            samples += len(desc)
+        if samples >= N_desc:
+            break
+    print(f"Total descriptors collected for PCA: {samples}")
+    pca = PCA(n_components=n_components, whiten=True)
+    pca.fit(np.vstack(descriptors))
+    joblib.dump(pca, "pca_sift_64.pkl")
+    return pca
+
+def escribir_descriptores_pca_en_memmap(df, root, pca, max_desc=300):
+    n_imagenes = len(df)
+    pca_dim = pca.n_components_
+
+    mm, N_total = crear_memmap_para_descriptores(n_imagenes, max_desc, pca_dim)
+
+    img_index = {}
+    pointer = 0
+
+    for i, img in enumerate(tqdm(image_generator(root, df), desc="PCA + memmap")):
+        kp, desc = dense_sift(img, debug=False)
+        if desc is None or desc.shape[0] == 0:
+            img_index[i] = (pointer, pointer)
+            continue
+
+        # proyectar PCA
+        desc_pca = pca.transform(desc).astype(np.float32)
+        desc_pca = normalize(desc_pca, norm='l2')
+        n = desc_pca.shape[0]
+
+        # escribir en el memmap
+        mm[pointer : pointer + n] = desc_pca
+
+        img_index[i] = (pointer, pointer + n)
+        pointer += n
+
+    mm.flush()
+
+    # Recortar el archivo si no se llenó por completo
+    print(f"Total descriptores escritos: {pointer}")
+    mm2 = np.memmap(
+        "descriptores_pca.dat",
+        dtype='float32',
+        mode='w+',
+        shape=(pointer, pca_dim)
+    )
+
+    joblib.dump(img_index, "index_descriptores_pca.pkl")
+    mm.flush()
+    return mm2, img_index
 #------------------- profiler -------------------
 
 def binning(values, max_points=10, agg="mean"):
-    """
-    Reduce una señal mediante agregación por ventanas.
-
-    agg puede ser: 'mean', 'median', 'min', 'max'
-    """
     n = len(values)
     if n <= max_points:
         return values  # nada que reducir
@@ -371,10 +433,12 @@ def preprocess_cluster(desc, pca=None):
 
 def extract_descriptors(df, root, debug=False):
     descriptors = []
+    sizes = []
     for img in tqdm(image_generator(root, df), desc="Extracting descriptors", total=len(df)):
         kp, desc = dense_sift(img, debug=debug)
         if desc is not None:
             descriptors.append(desc)
+            sizes.append(len(desc))
     descriptors = np.vstack(descriptors)
     return descriptors
 
@@ -513,20 +577,30 @@ def histograma_entropia(image, patch_size=16, step=8, show_patches=False):
 
 
 if __name__ == "__main__":
-    """subset_size = 3000
-    prop_test = 0.2
-    descriptors_train, descriptors_test = features_para_kmeans(
-        df, root,
-        subset_size=subset_size,
-        prop_test=prop_test,
-        dir_pca= None
-    )"""
-    #subset_size = 26000   # o lo que quieras para medir
+    pca = entrenar_pca(root, df, N_desc=200000, n_components=64)
+    desc, index_img = escribir_descriptores_pca_en_memmap(df, root, pca, max_desc=300)
+    #print(desc.shape)
+    #kmeans = train_kmeans(desc, n_clusters=216)
+    #joblib.dump(kmeans, "kmeans_bow_216_final.pkl")
+    #kmeans = MiniBatchKMeans(
+    #    n_clusters=216,
+    #    init="k-means++",
+    #    batch_size=10000)
+    #joblib.dump(kmeans, "kmeans_bow_216_final_mini.pkl")
+    #subset_size = 3000
+    #prop_test = 0.2
+    #descriptors_train, descriptors_test = features_para_kmeans(
+    #    df, root,
+    #    subset_size=subset_size,
+    #    prop_test=prop_test,
+    #    dir_pca= None
+    #)
+    #subset_size = 2000  # o lo que quieras para medir
     #df_train = df.sample(n=subset_size, random_state=42)
     #descs, tiempos, memorias = extract_descriptors_con_medicion(
     #    df_train, root, debug=False
     #)
 
-    graficar_mediciones_binned(csv_path="medicion_dense_sift.csv", max_points=150, agg="mean")
+    #graficar_mediciones_binned(csv_path="medicion_dense_sift.csv", max_points=150, agg="mean")
     #Ks = [64, 128, 256, 512, 1024]
     #visualize_inertia(descriptors_train, descriptors_test, Ks)
