@@ -169,11 +169,6 @@ def procesar_carpeta_imagenes(carpeta_raiz, archivo_salida="descriptores.pkl"):
     
     return resultados
 
-# Ejemplo de uso
-if __name__ == "__main__":
-    carpeta_raiz = "C:/Users/Mariona/Downloads/archive"
-    resultados = procesar_carpeta_imagenes(carpeta_raiz, "descriptores_sift_binarios.pkl")
-    
-    # Para cargar los resultados posteriormente:
-    # with open("descriptores_sift_binarios.pkl", 'rb') as f:
-    #     datos_cargados = pickle.load(f)
+
+carpeta_raiz = "C:/Users/Mariona/Downloads/archive"
+resultados = procesar_carpeta_imagenes(carpeta_raiz, "descriptores_sift_binarios.pkl")
