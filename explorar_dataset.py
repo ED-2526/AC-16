@@ -3,51 +3,58 @@ from glob import glob
 import os
 from matplotlib import pyplot as plt
 import numpy as np
-from PIL import Image
 import shutil
 import random
-#filtrar imagenes por tamaño
-# contar archivos por estilo
-# encontrar el estilo con menos archivos
-# crear una fucnion que divida entre train y test con la misma proporcion de estilos y que sean disjuntos, y que le pase por parametro la cantidad de muestas por estilo para train y para test
-# quiero saber el nombre del archivo de las imagenes más pequeñas
+import seaborn as sns
+from herraientas import *
 
-def get_archivos(root):
-    for estilo_path in glob(os.path.join(root, '*')):
-        estilo = os.path.basename(estilo_path)
-        return glob(os.path.join(os.path.join(estilo_path, estilo),'*.jpg'))
+def aplanar_estilos(root_dir):
+    for estilo in os.listdir(root_dir):
+        estilo_dir = os.path.join(root_dir, estilo)
+        if not os.path.isdir(estilo_dir):
+            continue
+        inner_dir = os.path.join(estilo_dir, estilo)
+        if os.path.isdir(inner_dir):
+            for f in os.listdir(inner_dir):
+                src = os.path.join(inner_dir, f)
+                dst = os.path.join(estilo_dir, f)
+                if os.path.exists(dst):
+                    continue
+                shutil.move(src, dst)
+            os.rmdir(inner_dir)
 
-def get_tamano_imagen(archivo):
 
-    with Image.open(archivo) as img:
-        return img.size[0] * img.size[1]
-
-def historgrama_tamaños_imagenes(root, draw_intervalo=None):
+def historgrama_tamaños_imagenes(root):
     tamaños = []
-    archivos = get_archivos(root)
-    for archivo in archivos:
-        tamaños.append(get_tamano_imagen(archivo))
-    pd.Series(tamaños).hist(bins=500)
-    if draw_intervalo:
-        plt.axvline(x=draw_intervalo[0], color='r', linestyle='--')
-        plt.axvline(x=draw_intervalo[1], color='r', linestyle='--')
+    ratios = []
+    for archivo in listar_archivos(root):
+        tamaño, ratio = get_tamano_imagen(archivo)
+        tamaños.append(tamaño)
+        ratios.append(ratio)
+    serie = pd.Series(tamaños)
+    serie.hist(bins=1000)
     plt.show()
+    print(serie.describe())
+    serie = pd.Series(ratios)
+    serie.hist(bins=1000)
+    plt.show()
+    print(serie.describe())
 
 def contar_archivos_por_estilo(root):
     estilos = {}
-    for estilo_path in glob(os.path.join(root, '*')):
-        estilo = os.path.basename(estilo_path)
-        archivos = glob(os.path.join(os.path.join(estilo_path, estilo),'*.jpg'))
+    for estilo, archivos in get_archivos(root):
         estilos[estilo] = len(archivos)
     return estilos
 
 def estilo_minimo(estilos_count):
     return min(estilos_count, key=estilos_count.get)
+
 def split_dataset(
     root_dir,
     output_dir,
     train_ratio=0.8,
-    seed=42
+    seed=42,
+    porcentaje_uso=0.45
 ):
     random.seed(seed)
     train_dir = os.path.join(output_dir, "train")
@@ -58,17 +65,14 @@ def split_dataset(
     styles = [d for d in os.listdir(root_dir)
               if os.path.isdir(os.path.join(root_dir, d))]
     for style in styles:
-        # carpeta donde realmente están las imágenes:
-        inner_dir = os.path.join(root_dir, style, style)
-        if not os.path.isdir(inner_dir):
-            continue
+        inner_dir = os.path.join(root_dir, style)
         # Crear carpeta del estilo en train y test
         os.makedirs(os.path.join(train_dir, style), exist_ok=True)
         os.makedirs(os.path.join(test_dir, style), exist_ok=True)
-        # Listar imágenes
         images = [f for f in os.listdir(inner_dir)
                   if os.path.isfile(os.path.join(inner_dir, f))]
         random.shuffle(images)
+        images = images[:int(len(images)*porcentaje_uso)]
         N = len(images)
         N_train = int(train_ratio * N)
         train_imgs = images[:N_train]
@@ -106,16 +110,26 @@ def fusionar_train_test(train_dir, test_dir, output_dir):
         process_folder(style_train)
         process_folder(style_test)
 root = "../dataset/"
-estilos_count = contar_archivos_por_estilo(root)
-print("Cantidad de archivos por estilo:")
-print(estilos_count)
-total = sum(estilos_count.values())
-print(f"Total de archivos: {total}")
-min_estilo = estilo_minimo(estilos_count)
-print(f"Estilo con menos archivos: {min_estilo} con {estilos_count[min_estilo]} archivos")
+
 split_dataset(
     root_dir=root,
     output_dir="../",
     train_ratio=0.8,
     seed=42
 )
+root = "../train"
+estilos_count = contar_archivos_por_estilo(root)
+print("Cantidad de archivos por estilo:")
+print(estilos_count)
+total = sum(estilos_count.values())
+print({estilo: f"{100*valor/total:.2f}" for estilo, valor in estilos_count.items()})
+print(f"Total de archivos: {total}")
+min_estilo = estilo_minimo(estilos_count)
+print(f"Estilo con menos archivos: {min_estilo} con {estilos_count[min_estilo]} archivos")
+labels = estilos_count.keys()
+data = estilos_count.values()
+colors = sns.color_palette('bright')
+
+# plotting data on chart
+plt.pie(data, labels=labels, colors=colors, autopct='%.0f%%')
+plt.show()
