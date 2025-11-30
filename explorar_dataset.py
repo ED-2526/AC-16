@@ -109,27 +109,25 @@ def fusionar_train_test(train_dir, test_dir, output_dir):
                         shutil.move(src, dst)
         process_folder(style_train)
         process_folder(style_test)
-root = "../dataset/"
 
-split_dataset(
-    root_dir=root,
-    output_dir="../",
-    train_ratio=0.8,
-    seed=42
-)
-root = "../train"
-estilos_count = contar_archivos_por_estilo(root)
-print("Cantidad de archivos por estilo:")
-print(estilos_count)
-total = sum(estilos_count.values())
-print({estilo: f"{100*valor/total:.2f}" for estilo, valor in estilos_count.items()})
-print(f"Total de archivos: {total}")
-min_estilo = estilo_minimo(estilos_count)
-print(f"Estilo con menos archivos: {min_estilo} con {estilos_count[min_estilo]} archivos")
-labels = estilos_count.keys()
-data = estilos_count.values()
-colors = sns.color_palette('bright')
+if __name__ == "__main__":
+    root = "../dataset"
+    aplanar_estilos(root)
+    split_dataset(root, "../")
+    """
+    estilos_count = contar_archivos_por_estilo(root)
+    print("Cantidad de archivos por estilo:")
+    print(estilos_count)
+    total = sum(estilos_count.values())
+    print({estilo: f"{100*valor/total:.2f}" for estilo, valor in estilos_count.items()})
+    print(f"Total de archivos: {total}")
+    min_estilo = estilo_minimo(estilos_count)
+    print(f"Estilo con menos archivos: {min_estilo} con {estilos_count[min_estilo]} archivos")
+    labels = estilos_count.keys()
+    data = estilos_count.values()
+    colors = sns.color_palette('bright')
 
-# plotting data on chart
-plt.pie(data, labels=labels, colors=colors, autopct='%.0f%%')
-plt.show()
+    # plotting data on chart
+    plt.pie(data, labels=labels, colors=colors, autopct='%.0f%%')
+    plt.show()
+    """

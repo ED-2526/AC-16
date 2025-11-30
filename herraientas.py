@@ -2,28 +2,29 @@ import cv2
 import os
 from PIL import Image
 from matplotlib import pyplot as plt
+import joblib
 
 def listar_estilos(root):
     return [
         d for d in os.listdir(root)
         if os.path.isdir(os.path.join(root, d))
     ]
-def listar_imagenes_estilo(root, estilo):
+def listar_imagenes_estilo(root, estilo, terminacion=".jpg"):
     archivos = []
     estilo_dir = os.path.join(root, estilo)
     for filename in os.listdir(estilo_dir):
-        if filename.endswith(".jpg"):
+        if filename.endswith(terminacion):
             archivos.append(os.path.join(estilo_dir, filename))
     return archivos
 
-def get_archivos(root):
+def get_archivos(root, terminacion=".jpg"):
     for estilo in listar_estilos(root):
-        yield estilo, listar_imagenes_estilo(root, estilo)
+        yield estilo, listar_imagenes_estilo(root, estilo, terminacion)
 
-def listar_archivos(root):
+def listar_archivos(root, terminacion=".jpg"):
     archivos = []
     for estilo in listar_estilos(root):
-        archivos.extend(listar_imagenes_estilo(root, estilo))
+        archivos.extend(listar_imagenes_estilo(root, estilo, terminacion))
     return archivos
 
 def get_tamano_imagen(archivo):
@@ -38,3 +39,13 @@ def visualizar_imagen(img):
     plt.imshow(img)
     plt.waitforbuttonpress()
     plt.close('all')
+
+if __name__ == "__main__":
+    train = "../train/"
+    test = "../test/"
+    dataset = "../dataset"
+    roots = [train, test, dataset]
+    archivos = set()
+    for root in roots:
+        archivos = archivos.union(set(listar_archivos(root)))
+    print(len(archivos))
