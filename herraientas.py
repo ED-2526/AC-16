@@ -14,7 +14,7 @@ def listar_imagenes_estilo(root, estilo, terminacion=".jpg"):
     estilo_dir = os.path.join(root, estilo)
     for filename in os.listdir(estilo_dir):
         if filename.endswith(terminacion):
-            archivos.append(os.path.join(estilo_dir, filename))
+            archivos.append(filename)
     return archivos
 
 def get_archivos(root, terminacion=".jpg"):

@@ -111,9 +111,11 @@ def fusionar_train_test(train_dir, test_dir, output_dir):
         process_folder(style_test)
 
 if __name__ == "__main__":
-    root = "../dataset"
-    aplanar_estilos(root)
-    split_dataset(root, "../")
+    root = "../train"
+    print(contar_archivos_por_estilo(root))
+    #aplanar_estilos(root)
+    #split_dataset(root, "../")
+
     """
     estilos_count = contar_archivos_por_estilo(root)
     print("Cantidad de archivos por estilo:")
