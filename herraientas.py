@@ -3,6 +3,9 @@ import os
 from PIL import Image
 from matplotlib import pyplot as plt
 import joblib
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
 
 def listar_estilos(root):
     return [
@@ -12,9 +15,11 @@ def listar_estilos(root):
 def listar_imagenes_estilo(root, estilo, terminacion=".jpg"):
     archivos = []
     estilo_dir = os.path.join(root, estilo)
+    if not os.path.isdir(estilo_dir):
+        return []
     for filename in os.listdir(estilo_dir):
         if filename.endswith(terminacion):
-            archivos.append(filename)
+            archivos.append(os.path.join(estilo_dir, filename))
     return archivos
 
 def get_archivos(root, terminacion=".jpg"):
@@ -33,12 +38,27 @@ def get_tamano_imagen(archivo):
 
 def cargar_imagen(path):
     img = cv2.imread(path)
+    if img is None:
+        return None
     return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 def visualizar_imagen(img):
     plt.imshow(img)
     plt.waitforbuttonpress()
     plt.close('all')
+
+def visualizar_histograma(hist):
+    num_clusters = len(hist)
+    x = np.arange(num_clusters)
+
+    plt.figure(figsize=(16,4))
+    sns.barplot(x=x, y=hist, color="steelblue")
+
+    plt.title("Histograma Bag of Words")
+    plt.xlabel("Índice de palabra visual (cluster)")
+    plt.ylabel("Frecuencia")
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
     train = "../train/"

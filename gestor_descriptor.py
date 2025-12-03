@@ -4,15 +4,14 @@ from herraientas import *
 import os
 
 class GestorDescriptor:
-
     def __init__(self):
         self._outdir = None
-        self._estilos = None
+        self._estilos = []
         self._archivos = {}
 
     def _limpiar_gestor(self):
         self._outdir = None
-        self._estilos = None
+        self._estilos = []
         self._archivos = {}
 
     def _get_dir(self, estilo, archivo=None):
@@ -33,8 +32,8 @@ class GestorDescriptor:
         estilos = listar_estilos(self._outdir)
         self.crear_directorios(estilos)
         for estilo, archivos in get_archivos(self._outdir, terminacion=".pkl"):
-            print(archivos)
             for archivo in archivos:
+                archivo = os.path.basename(archivo)
                 self._archivos[archivo] = estilo
 
     def crear_directorios(self, estilos=None):
@@ -50,14 +49,17 @@ class GestorDescriptor:
         os.makedirs(self._get_dir(estilo), exist_ok=True)
 
     def existe_estilo(self, estilo):
-        return estilo in self._estilo
+        return estilo in self._estilos
 
     def convertir_pkl(self, archivo):
-        return archivo[:-4] + ".pkl"
+        if archivo.endswith(".jpg"):
+            return archivo[:-4] + ".pkl"
+        return archivo
     
     def guardar_descriptor(self, archivo, estilo, descriptor):
         if not self.existe_estilo(estilo):
             self.nuevo_estilo(estilo)
+        archivo = os.path.basename(archivo)
         archivo = self.convertir_pkl(archivo)
         joblib.dump(descriptor,self._get_dir(estilo, archivo))
         self._archivos[archivo] = estilo
@@ -70,8 +72,8 @@ class GestorDescriptor:
         return self._archivos[archivo]
 
     def cargar_descriptor(self, archivo, estilo= None):
-        if archivo.endswith(".jpg"):
-            archivo = self.convertir_pkl(archivo)
+        archivo = os.path.basename(archivo)
+        archivo = self.convertir_pkl(archivo)
         if not estilo:
             estilo = self._get_estilo(archivo)
         path = self._get_dir(estilo, archivo)
@@ -91,17 +93,29 @@ class GestorDescriptor:
             yield self.cargar_descriptor(archivo, estilo)
 
     def cargar_todos(self):
-        archivos = listar_archivos(root, terminacion=".pkl")
+        archivos = listar_archivos(self._outdir, terminacion=".pkl")
         return self.cargar_descriptores(archivos)
+
+    def archivo_in(self, archivo, estilo=None):
+        archivo = self.convertir_pkl(os.path.basename(archivo))
+        if estilo:
+            return archivo in [self.convertir_pkl(os.path.basename(arc)) for arc in listar_imagenes_estilo(self._outdir, estilo, terminacion=".pkl")]
+        return archivo in listar_archivos(self._outdir, terminacion=".pkl")
+
 
     def __str__(self):
         return f"{self._outdir}\n{self._estilos}\n{self._archivos}"
 
+    def get_estilos(self):
+        return self._estilos
 
-root = "../train"
-dataset = "../descriptores"
-g = GestorDescriptor()
-g.inicializar("../descriptores", existe=True)
-print(g)
-with open("../descriptores\\Art_Nouveau\\prueba.txt") as handle:
-    print(handle.read())
+    def __len__(self):
+        return len(self._archivos)
+
+if __name__ == "__main__":
+    root = "../train"
+    dataset = "../descriptores"
+    g = GestorDescriptor()
+    g.inicializar("../descriptores_train", existe=True)
+    desc = g.cargar_descriptor("232333.jpg")
+    print(type(desc[0,0]))
