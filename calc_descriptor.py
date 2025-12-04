@@ -7,6 +7,12 @@ from herraientas import *
 from gestor_descriptor import GestorDescriptor
 from tqdm import tqdm
 
+"""
+1. convertim la imatge a gris
+2. busquem els kp i els guardem en una llista (kp=[kp1, kp2, ..., kpn])
+3. fem una llista amb els descriptors de cada kp (descriptors=[desck1, desck2, ..., desckn]), i els guardem mitjaçant el gestor en la carpeta corresponent a la img: ara tindrem tantes carpetes com img, i dins tants descriptors com kp te la img.
+"""
+
 def reescalar(image, max_size=512):
     h, w = image.shape[:2]
     if h > w:
