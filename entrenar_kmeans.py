@@ -1,4 +1,3 @@
-
 from herraientas import *
 from gestor_descriptor import GestorDescriptor
 import cv2
