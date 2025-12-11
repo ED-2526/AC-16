@@ -3,11 +3,34 @@ import joblib
 from herraientas import *
 import os
 
+#============== Normalización ==============
+
+def rootsift(descriptors, eps=1e-7):
+    descriptors = descriptors / (descriptors.sum(axis=1, keepdims=True) + eps)
+    descriptors = np.sqrt(descriptors)
+    return descriptors
+
+def l1(x, eps=1e-7):
+    x = np.asarray(x, dtype=np.float64)
+    s = x.sum(axis=1, keepdims=True) + eps
+    return x / s
+
+def l2(x, eps=1e-7):
+    x = np.asarray(x, dtype=np.float64)
+    n = np.linalg.norm(x, axis=1, keepdims=True) + eps
+    return x / n
+
+def no_norm(x, eps=1e-7):
+    return np.asarray(x, dtype=np.float64)
+
+
 class GestorDescriptor:
-    def __init__(self):
+    def __init__(self, tipo = ".pkl"):
         self._outdir = None
         self._estilos = []
         self._archivos = {}
+        self._norm = no_norm
+        self._tipo = tipo
 
     def _limpiar_gestor(self):
         self._outdir = None
@@ -77,7 +100,7 @@ class GestorDescriptor:
         if not estilo:
             estilo = self._get_estilo(archivo)
         path = self._get_dir(estilo, archivo)
-        return joblib.load(path)
+        return self._norm(joblib.load(path))
 
     def cargar_descriptores(self, archivos, estilos=None):
         if estilos:
@@ -112,10 +135,21 @@ class GestorDescriptor:
     def __len__(self):
         return len(self._archivos)
 
+    def set_norm(self, norm):
+        normas = {"l1": l1, "l2": l2, "root sift": rootsift}
+        if norm and norm.lower() in normas:
+            self._norm = normas[norm]
+
+    def len_estilo(self, estilo):
+        return len(os.listdir(self._get_dir(estilo)))
+
+
+
 if __name__ == "__main__":
-    root = "../train"
-    dataset = "../descriptores"
+    #root = "../train"
+    #dataset = "../descriptores"
     g = GestorDescriptor()
-    g.inicializar("../descriptores_train", existe=True)
-    desc = g.cargar_descriptor("232333.jpg")
-    print(type(desc[0,0]))
+    g.inicializar("../dataset", existe=True)
+    print(len(g))
+    #desc = g.cargar_descriptor("232333.jpg")
+    #print(type(desc[0,0]))

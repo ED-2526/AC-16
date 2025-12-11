@@ -26,7 +26,6 @@ def reescalar(image, max_size=512):
 
 
 def dense_kps(gray, step=8, estimador:SIFTScaleEstimator=SIFTScaleEstimator()):
-    gray, _ = reescalar(gray)
     h, w = gray.shape
     keypoints = []
     estimador.build_pyramid(gray)
@@ -37,16 +36,17 @@ def dense_kps(gray, step=8, estimador:SIFTScaleEstimator=SIFTScaleEstimator()):
     return keypoints
 
 
-def procesar_imagen(imagen_path, sift: cv2.SIFT, scale_estimator: SIFTScaleEstimator, step=8):
+def procesar_imagen(imagen_path, sift, scale_estimator, step=8):
     img = cargar_imagen(imagen_path)
     if img is None:
         return None
+
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    kp = dense_kps(gray, estimador=scale_estimator, step=step)
-    _, descriptores = sift.compute(gray, kp)
-    
-    if descriptores is None:
-        return None
+    gray_rescaled, scale_factor = reescalar(gray)
+
+    kp = dense_kps(gray_rescaled, estimador=scale_estimator, step=step)
+    _, descriptores = sift.compute(gray_rescaled, kp)
+
     return descriptores
 
 def procesar_carpeta_imagenes(carpeta_raiz, carpeta_salida, sobreescribir=False, existe_out=True):

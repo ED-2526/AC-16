@@ -54,7 +54,8 @@ def split_dataset(
     output_dir,
     train_ratio=0.8,
     seed=42,
-    porcentaje_uso=0.45
+    porcentaje_uso=0.45,
+    muestras = 1888
 ):
     random.seed(seed)
     train_dir = os.path.join(output_dir, "train")
@@ -72,7 +73,10 @@ def split_dataset(
         images = [f for f in os.listdir(inner_dir)
                   if os.path.isfile(os.path.join(inner_dir, f))]
         random.shuffle(images)
-        images = images[:int(len(images)*porcentaje_uso)]
+        if muestras:
+            images = images[:muestras]
+        else:
+            images = images[:int(len(images)*porcentaje_uso)]
         N = len(images)
         N_train = int(train_ratio * N)
         train_imgs = images[:N_train]
@@ -111,12 +115,12 @@ def fusionar_train_test(train_dir, test_dir, output_dir):
         process_folder(style_test)
 
 if __name__ == "__main__":
-    root = "../train"
-    print(contar_archivos_por_estilo(root))
+    #fusionar_train_test("../train", "../test", "../dataset")
     #aplanar_estilos(root)
     #split_dataset(root, "../")
-
-    """
+    #root = "../dataset"
+    #split_dataset(root, output_dir="../", muestras=1888)
+    root = "../test"
     estilos_count = contar_archivos_por_estilo(root)
     print("Cantidad de archivos por estilo:")
     print(estilos_count)
@@ -125,6 +129,7 @@ if __name__ == "__main__":
     print(f"Total de archivos: {total}")
     min_estilo = estilo_minimo(estilos_count)
     print(f"Estilo con menos archivos: {min_estilo} con {estilos_count[min_estilo]} archivos")
+    #historgrama_tamaños_imagenes(root)
     labels = estilos_count.keys()
     data = estilos_count.values()
     colors = sns.color_palette('bright')
@@ -132,4 +137,3 @@ if __name__ == "__main__":
     # plotting data on chart
     plt.pie(data, labels=labels, colors=colors, autopct='%.0f%%')
     plt.show()
-    """
