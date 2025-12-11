@@ -44,13 +44,7 @@ class SIFTScaleEstimator:
             )
 
     def estimate(self, x, y):
-        """
-        Calcula el tamaño para múltiples puntos a la vez.
-        x: array o lista de coordenadas X
-        y: array o lista de coordenadas Y
-        Retorna: array de numpy con los tamaños
-        """
-        # Asegurar que son arrays de numpy
+        # asegurar que son arrays de numpy
         x = np.atleast_1d(np.array(x))
         y = np.atleast_1d(np.array(y))
         
@@ -61,22 +55,22 @@ class SIFTScaleEstimator:
         for o in range(self.num_octaves):
             scale_factor = 2 ** o
             
-            # Coordenadas proyectadas a la octava actual (vectorizado)
+            # coordenadas proyectadas a la octava actual 
             xo = (x / scale_factor).astype(int)
             yo = (y / scale_factor).astype(int)
             
-            # Verificar límites de imagen en esta octava
+            # verificar límites de imagen en esta octava
             if len(self.dog[o]) == 0: continue
             h, w = self.dog[o][0].shape
             
-            # Máscara booleana de puntos válidos
+            # mascara booleana de puntos validos
             valid = (xo >= 0) & (xo < w) & (yo >= 0) & (yo < h)
             
-            # Si ningún punto cae dentro en esta octava, saltamos
+            # si ningun punto cae dentro en esta octava, saltamos
             if not np.any(valid):
                 continue
             
-            # Filtramos solo los índices válidos para no acceder fuera de matriz
+            # filtramos solo los índices válidos para no acceder fuera de matriz
             valid_xo = xo[valid]
             valid_yo = yo[valid]
             
@@ -84,23 +78,19 @@ class SIFTScaleEstimator:
             sigmas = self.sigmas[o]
             
             for i, d in enumerate(dogs):
-                # Extraemos valores de píxel masivamente
+                # extraemos valores de pixel masivamente
                 vals = np.abs(d[valid_yo, valid_xo])
                 
-                # Comparamos con el mejor valor guardado hasta ahora
-                # Nota: best_vals[valid] extrae los valores actuales para compararlos
+                # comparamos con el mejor valor guardado hasta ahora
                 current_bests = best_vals[valid]
                 improved = vals > current_bests
                 
-                # 'improved' es una máscara relativa a los puntos 'valid'.
-                # Necesitamos actualizar 'best_vals' y 'final_sizes' en los índices originales.
                 
-                # Indices originales que son válidos y además han mejorado
                 idx_to_update = np.where(valid)[0][improved]
                 
                 best_vals[idx_to_update] = vals[improved]
                 
-                # Cálculo del tamaño: 2 * sigma * 2^octava
+                # calculo del tamaño
                 size_val = 2 * sigmas[i+1] * scale_factor
                 final_sizes[idx_to_update] = size_val
 
@@ -156,4 +146,5 @@ if __name__ == "__main__":
                           flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     
     cv2.imwrite('image-with-keypoints.jpg', img)
+
     """
